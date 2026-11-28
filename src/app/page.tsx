@@ -170,46 +170,41 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Load saved preferences and auto-use GPS if permission is already granted
+  // Request live browser location on app initialization and fetch local AQI
   useEffect(() => {
     const initial = readSavedContext();
     setUserContext(initial);
 
     let cancelled = false;
-    const bootstrap = async () => {
-      if (
-        typeof navigator !== 'undefined' &&
-        'geolocation' in navigator &&
-        navigator.permissions?.query
-      ) {
-        try {
-          const status = await navigator.permissions.query({ name: 'geolocation' });
-          if (status.state === 'granted' && !cancelled) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                if (cancelled) return;
-                const coords = {
-                  latitude: pos.coords.latitude,
-                  longitude: pos.coords.longitude,
-                };
-                setLiveCoords(coords);
-                fetchPlanForContext(initial, coords, false);
-              },
-              () => {
-                if (!cancelled) fetchPlanForContext(initial, null, false);
-              },
-              { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
-            );
-            return;
-          }
-        } catch {
-          // Permissions API unsupported — proceed with saved/default city
-        }
-      }
-      if (!cancelled) fetchPlanForContext(initial, null, false);
-    };
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setErrorNotice('Geolocation is not supported in this browser. Showing saved city telemetry.');
+      fetchPlanForContext(initial, null, false);
+      return;
+    }
 
-    bootstrap();
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        const coords: Coordinates = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        };
+        setLiveCoords(coords);
+        setIsLocating(false);
+        fetchPlanForContext(initial, coords, true);
+      },
+      (geoError) => {
+        if (cancelled) return;
+        setIsLocating(false);
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          setErrorNotice('Location permission was denied. Showing saved city telemetry; you can switch cities below.');
+        }
+        fetchPlanForContext(initial, null, false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+    );
+
     return () => {
       cancelled = true;
     };
@@ -305,10 +300,10 @@ export default function Dashboard() {
       )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-7">
-        {/* Location & Live GPS Bar */}
+        {/* Live Location Monitor Bar */}
         <LocationQuickBar
           activeCity={airQuality?.city || userContext.city}
-          onSelectCity={handleSelectCity}
+          coordinates={liveCoords}
           onUseLiveLocation={handleUseLiveLocation}
           isLocating={isLocating}
           isLiveLocationActive={liveCoords !== null}

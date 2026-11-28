@@ -1,11 +1,80 @@
-import React, { useId } from 'react';
+'use client';
+
+import React, { useEffect, useId, useState } from 'react';
 import { getAQITheme } from '@/lib/constants';
 import { AQICategory } from '@/types/aqi';
+
+export const MAX_AQI_SCALE = 500;
+const START_ANGLE = 240; // 8 o'clock (symmetric 240° arc centered at 12 o'clock)
+const END_ANGLE = 480;   // 4 o'clock
+const SWEEP_ANGLE = END_ANGLE - START_ANGLE;
 
 interface AQIRadialGaugeProps {
   aqi: number;
   category: AQICategory;
   size?: number;
+}
+
+export interface GaugeMetrics {
+  clampedAQI: number;
+  progress: number;
+  radius: number;
+  circumference: number;
+  arcLength: number;
+  targetOffset: number;
+  trackPath: string;
+}
+
+function polarToCartesian(centerX: number, centerY: number, r: number, angleInDegrees: number) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
+  return {
+    x: centerX + r * Math.cos(angleInRadians),
+    y: centerY + r * Math.sin(angleInRadians),
+  };
+}
+
+/**
+ * Computes clamped progress, static clockwise SVG arc geometry, and stroke-dashoffset metrics.
+ */
+export function computeGaugeMetrics(aqi: number, size = 200, strokeWidth = 14): GaugeMetrics {
+  const safeSize = Number.isFinite(size) && size > strokeWidth ? size : 200;
+  const radius = (safeSize - strokeWidth) / 2;
+  const center = safeSize / 2;
+  const circumference = 2 * Math.PI * radius;
+  const arcLength = (SWEEP_ANGLE / 360) * circumference;
+
+  const clampedAQI = Number.isFinite(aqi)
+    ? Math.min(Math.max(aqi, 0), MAX_AQI_SCALE)
+    : 0;
+  const progress = Math.min(Math.max(clampedAQI / MAX_AQI_SCALE, 0), 1);
+  const targetOffset = Math.min(Math.max(arcLength * (1 - progress), 0), arcLength);
+
+  // Static clockwise 240° arc prevents SVG largeArcFlag flipping or chord inversion
+  const start = polarToCartesian(center, center, radius, START_ANGLE);
+  const end = polarToCartesian(center, center, radius, END_ANGLE);
+  const trackPath = [
+    'M',
+    start.x.toFixed(3),
+    start.y.toFixed(3),
+    'A',
+    radius,
+    radius,
+    0,
+    1,
+    1,
+    end.x.toFixed(3),
+    end.y.toFixed(3),
+  ].join(' ');
+
+  return {
+    clampedAQI,
+    progress,
+    radius,
+    circumference,
+    arcLength,
+    targetOffset,
+    trackPath,
+  };
 }
 
 export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
@@ -16,68 +85,90 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
   const gradientId = useId();
   const theme = getAQITheme(category);
   const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2;
-  const center = size / 2;
+  const metrics = computeGaugeMetrics(aqi, size, strokeWidth);
 
-  const startAngle = 150;
-  const endAngle = 390;
-  const totalAngle = endAngle - startAngle;
+  const [dashOffset, setDashOffset] = useState<number>(metrics.arcLength);
+  const [transitionEnabled, setTransitionEnabled] = useState<boolean>(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
 
-  const clampedAQI = Math.min(Math.max(aqi, 0), 500);
-  const percentage = clampedAQI / 500;
-  const currentAngle = startAngle + percentage * totalAngle;
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
-  const polarToCartesian = (centerX: number, centerY: number, r: number, angleInDegrees: number) => {
-    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
-    return {
-      x: centerX + r * Math.cos(angleInRadians),
-      y: centerY + r * Math.sin(angleInRadians),
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setTransitionEnabled(false);
+      setDashOffset(metrics.targetOffset);
+      return;
+    }
+
+    // Reset prior animation frame & transition state cleanly before sweeping to new AQI target
+    setTransitionEnabled(false);
+    setDashOffset(metrics.arcLength);
+
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setTransitionEnabled(true);
+        setDashOffset(metrics.targetOffset);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
     };
-  };
+  }, [metrics.arcLength, metrics.targetOffset, prefersReducedMotion]);
 
-  const describeArc = (x: number, y: number, r: number, startA: number, endA: number) => {
-    const start = polarToCartesian(x, y, r, endA);
-    const end = polarToCartesian(x, y, r, startA);
-    const largeArcFlag = endA - startA <= 180 ? '0' : '1';
-    return ['M', start.x, start.y, 'A', r, r, 0, largeArcFlag, 0, end.x, end.y].join(' ');
-  };
-
-  const bgArc = describeArc(center, center, radius, startAngle, endAngle);
-  const activeArc = describeArc(center, center, radius, startAngle, currentAngle);
+  const displayAQI = Number.isFinite(aqi) ? Math.max(0, Math.round(aqi)) : 0;
 
   return (
     <div
       role="img"
-      aria-label={`Indian AQI ${aqi}, ${category}`}
+      aria-label={`Indian AQI ${displayAQI}, ${category}`}
       className="relative flex flex-col items-center justify-center select-none"
       style={{ width: size, height: size }}
     >
-      <svg width={size} height={size} className="overflow-visible text-slate-200 dark:text-slate-800" aria-hidden="true">
+      <svg
+        width={size}
+        height={size}
+        className="overflow-visible text-slate-200 dark:text-slate-800"
+        aria-hidden="true"
+      >
         <defs>
-          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientId} x1="0%" y1="100%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={theme.hex} stopOpacity="0.85" />
             <stop offset="100%" stopColor={theme.hex} stopOpacity="1" />
           </linearGradient>
         </defs>
 
         <path
-          d={bgArc}
+          d={metrics.trackPath}
           fill="none"
           stroke="currentColor"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
 
-        {percentage > 0.01 && (
-          <path
-            d={activeArc}
-            fill="none"
-            stroke={`url(#${gradientId})`}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            className="transition-all duration-700 ease-out"
-          />
-        )}
+        <path
+          d={metrics.trackPath}
+          fill="none"
+          stroke={`url(#${gradientId})`}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${metrics.arcLength} ${metrics.circumference}`}
+          style={{
+            strokeDashoffset: dashOffset,
+            strokeOpacity: metrics.clampedAQI > 0 ? 1 : 0,
+            transition: transitionEnabled
+              ? 'stroke-dashoffset 700ms cubic-bezier(0.22, 1, 0.36, 1), stroke-opacity 200ms ease-out'
+              : 'none',
+          }}
+        />
       </svg>
 
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center pt-2">
@@ -85,7 +176,7 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
           Indian AQI
         </span>
         <span className="text-5xl font-black text-slate-900 dark:text-white font-mono tabular-nums tracking-tighter leading-none mt-1">
-          {aqi}
+          {displayAQI}
         </span>
         <span
           className={`text-xs font-semibold px-2.5 py-0.5 rounded-full mt-2 border ${theme.pillBg} ${theme.pillText} ${theme.pillBorder}`}
