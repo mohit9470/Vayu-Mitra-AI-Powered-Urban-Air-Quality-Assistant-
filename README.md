@@ -86,4 +86,4 @@ For local development:
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000).
+Open https://vayumitra-rosy.vercel.app/
