@@ -25,7 +25,7 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
   className = '',
   ...rest
 }) => {
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const timeoutsRef = useRef<number[]>([]);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -36,7 +36,11 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
 
     const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
     mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
+    return () => {
+      mediaQuery.removeEventListener('change', handler);
+      timeoutsRef.current.forEach((id) => window.clearTimeout(id));
+      timeoutsRef.current = [];
+    };
   }, []);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -60,19 +64,15 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
       const size = Math.max(rect.width, rect.height) * 2;
+      const rippleId = Date.now() + Math.random();
 
-      const newRipple: Ripple = {
-        id: Date.now(),
-        x: clickX,
-        y: clickY,
-        size,
-      };
+      setRipples((prev) => [...prev, { id: rippleId, x: clickX, y: clickY, size }]);
 
-      setRipples((prev) => [...prev, newRipple]);
-
-      setTimeout(() => {
-        setRipples((prev) => prev.filter((r) => r.id !== newRipple.id));
+      const timerId = window.setTimeout(() => {
+        setRipples((prev) => prev.filter((r) => r.id !== rippleId));
+        timeoutsRef.current = timeoutsRef.current.filter((id) => id !== timerId);
       }, 600);
+      timeoutsRef.current.push(timerId);
     }
 
     if (onClick) {
@@ -80,22 +80,20 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
     }
   };
 
-  // Base styles for 3D physical depth
   let variantStyles = '';
   if (variant === 'primary') {
     variantStyles =
-      'bg-slate-900 text-white border border-slate-800 shadow-[0_4px_0_#020617,0_8px_16px_-2px_rgba(15,23,42,0.25)] active:translate-y-[3px] active:shadow-[0_1px_0_#020617,0_2px_4px_rgba(15,23,42,0.15)]';
+      'bg-slate-900 dark:bg-teal-600 text-white border border-slate-800 dark:border-teal-700 shadow-[0_4px_0_#020617,0_8px_16px_-2px_rgba(15,23,42,0.25)] dark:shadow-[0_4px_0_#0f766e,0_8px_16px_-2px_rgba(13,148,136,0.25)] active:translate-y-[3px] active:shadow-[0_1px_0_#020617,0_2px_4px_rgba(15,23,42,0.15)]';
   } else if (variant === 'telemetry') {
     variantStyles =
-      'bg-white text-slate-900 border border-slate-300 shadow-[0_3px_0_#cbd5e1,0_6px_12px_-2px_rgba(15,23,42,0.08)] active:translate-y-[2px] active:shadow-[0_1px_0_#cbd5e1,0_2px_4px_rgba(15,23,42,0.05)]';
+      'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 shadow-[0_3px_0_#cbd5e1,0_6px_12px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_3px_0_#334155,0_6px_12px_-2px_rgba(0,0,0,0.3)] active:translate-y-[2px] active:shadow-[0_1px_0_#cbd5e1,0_2px_4px_rgba(15,23,42,0.05)]';
   } else {
     variantStyles =
-      'bg-slate-100 text-slate-800 border border-slate-200 shadow-[0_3px_0_#cbd5e1,0_4px_8px_rgba(0,0,0,0.05)] active:translate-y-[2px] active:shadow-[0_1px_0_#cbd5e1]';
+      'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-[0_3px_0_#cbd5e1,0_4px_8px_rgba(0,0,0,0.05)] active:translate-y-[2px] active:shadow-[0_1px_0_#cbd5e1]';
   }
 
   return (
     <button
-      ref={buttonRef}
       disabled={disabled}
       onClick={handleClick}
       onMouseMove={handleMouseMove}
@@ -103,7 +101,6 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
       className={`relative overflow-hidden font-semibold rounded-xl transition-all duration-100 select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-700 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none ${variantStyles} ${className}`}
       {...rest}
     >
-      {/* (b) Cursor-tracking specular light sheen */}
       {mousePos && !disabled && !prefersReducedMotion && (
         <span
           className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-150"
@@ -113,7 +110,6 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
         />
       )}
 
-      {/* (c) Time-based state feedback micro-ripple */}
       {ripples.map((r) => (
         <span
           key={r.id}
@@ -129,7 +125,6 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
         />
       ))}
 
-      {/* Button content */}
       <span className="relative z-20 flex items-center justify-center space-x-2">
         {children}
       </span>

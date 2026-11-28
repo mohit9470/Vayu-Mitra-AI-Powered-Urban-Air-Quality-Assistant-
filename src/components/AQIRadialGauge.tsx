@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { getAQITheme } from '@/lib/constants';
 import { AQICategory } from '@/types/aqi';
 
@@ -13,17 +13,16 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
   category,
   size = 200,
 }) => {
+  const gradientId = useId();
   const theme = getAQITheme(category);
   const strokeWidth = 14;
   const radius = (size - strokeWidth) / 2;
   const center = size / 2;
-  
-  // 240-degree arc (from 150° to 390°)
+
   const startAngle = 150;
   const endAngle = 390;
-  const totalAngle = endAngle - startAngle; // 240 deg
+  const totalAngle = endAngle - startAngle;
 
-  // Clamp AQI for meter visualization (0 to 500)
   const clampedAQI = Math.min(Math.max(aqi, 0), 500);
   const percentage = clampedAQI / 500;
   const currentAngle = startAngle + percentage * totalAngle;
@@ -47,30 +46,33 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
   const activeArc = describeArc(center, center, radius, startAngle, currentAngle);
 
   return (
-    <div className="relative flex flex-col items-center justify-center select-none" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="overflow-visible">
+    <div
+      role="img"
+      aria-label={`Indian AQI ${aqi}, ${category}`}
+      className="relative flex flex-col items-center justify-center select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="overflow-visible text-slate-200 dark:text-slate-800" aria-hidden="true">
         <defs>
-          <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={theme.hex} stopOpacity="0.85" />
             <stop offset="100%" stopColor={theme.hex} stopOpacity="1" />
           </linearGradient>
         </defs>
 
-        {/* Background Track */}
         <path
           d={bgArc}
           fill="none"
-          stroke="#E2E8F0"
+          stroke="currentColor"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
 
-        {/* Active Value Arc */}
         {percentage > 0.01 && (
           <path
             d={activeArc}
             fill="none"
-            stroke="url(#gaugeGradient)"
+            stroke={`url(#${gradientId})`}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             className="transition-all duration-700 ease-out"
@@ -78,21 +80,15 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
         )}
       </svg>
 
-      {/* Numerical Telemetry in Center */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center pt-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Indian AQI
         </span>
-        <span className="text-5xl font-black text-slate-900 font-mono tabular-nums tracking-tighter leading-none mt-1">
+        <span className="text-5xl font-black text-slate-900 dark:text-white font-mono tabular-nums tracking-tighter leading-none mt-1">
           {aqi}
         </span>
         <span
-          className="text-xs font-semibold px-2 py-0.5 rounded-full mt-2"
-          style={{
-            backgroundColor: theme.pillBg.replace('bg-', ''),
-            color: theme.hex,
-            border: `1px solid ${theme.hex}40`,
-          }}
+          className={`text-xs font-semibold px-2.5 py-0.5 rounded-full mt-2 border ${theme.pillBg} ${theme.pillText} ${theme.pillBorder}`}
         >
           {category}
         </span>
