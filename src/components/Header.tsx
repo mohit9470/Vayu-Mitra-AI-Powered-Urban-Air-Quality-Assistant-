@@ -1,18 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { Wind, ShieldCheck, Sun, Moon } from 'lucide-react';
 
-export const Header: React.FC = () => {
-  const [isDark, setIsDark] = useState(false);
+function subscribeTheme(callback: () => void): () => void {
+  if (typeof document === 'undefined') return () => {};
+  const observer = new MutationObserver(callback);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}
 
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'));
-  }, []);
+function getThemeSnapshot(): boolean {
+  return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+}
+
+export const Header: React.FC = () => {
+  const isDark = useSyncExternalStore(subscribeTheme, getThemeSnapshot, () => false);
 
   const toggleTheme = () => {
     const next = !isDark;
-    setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
     try {
       localStorage.setItem('vayumitra_theme', next ? 'dark' : 'light');

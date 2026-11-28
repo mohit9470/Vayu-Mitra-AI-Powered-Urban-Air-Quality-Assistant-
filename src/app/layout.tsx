@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -16,8 +17,6 @@ export const viewport: Viewport = {
   ],
 };
 
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('vayumitra_theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: {
@@ -25,10 +24,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
       <body className="antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-teal-500 selection:text-white transition-colors duration-200">
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
         <div className="min-h-screen flex flex-col">
           {children}
         </div>

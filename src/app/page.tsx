@@ -90,9 +90,12 @@ export default function Dashboard() {
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   const userContextRef = useRef(userContext);
-  userContextRef.current = userContext;
   const liveCoordsRef = useRef(liveCoords);
-  liveCoordsRef.current = liveCoords;
+
+  useEffect(() => {
+    userContextRef.current = userContext;
+    liveCoordsRef.current = liveCoords;
+  }, [userContext, liveCoords]);
 
   const persistContext = (ctx: UserContext) => {
     try {
@@ -172,38 +175,42 @@ export default function Dashboard() {
 
   // Request live browser location on app initialization and fetch local AQI
   useEffect(() => {
-    const initial = readSavedContext();
-    setUserContext(initial);
-
     let cancelled = false;
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      setErrorNotice('Geolocation is not supported in this browser. Showing saved city telemetry.');
-      fetchPlanForContext(initial, null, false);
-      return;
-    }
 
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        const coords: Coordinates = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        };
-        setLiveCoords(coords);
-        setIsLocating(false);
-        fetchPlanForContext(initial, coords, true);
-      },
-      (geoError) => {
-        if (cancelled) return;
-        setIsLocating(false);
-        if (geoError.code === geoError.PERMISSION_DENIED) {
-          setErrorNotice('Location permission was denied. Showing saved city telemetry; you can switch cities below.');
-        }
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const initial = readSavedContext();
+      setUserContext(initial);
+
+      if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+        setErrorNotice('Geolocation is not supported in this browser. Showing saved city telemetry.');
         fetchPlanForContext(initial, null, false);
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-    );
+        return;
+      }
+
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return;
+          const coords: Coordinates = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          };
+          setLiveCoords(coords);
+          setIsLocating(false);
+          fetchPlanForContext(initial, coords, true);
+        },
+        (geoError) => {
+          if (cancelled) return;
+          setIsLocating(false);
+          if (geoError.code === geoError.PERMISSION_DENIED) {
+            setErrorNotice('Location permission was denied. Showing saved city telemetry; you can switch cities below.');
+          }
+          fetchPlanForContext(initial, null, false);
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    });
 
     return () => {
       cancelled = true;

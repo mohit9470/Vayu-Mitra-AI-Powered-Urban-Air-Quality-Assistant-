@@ -1,48 +1,80 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getAirQuality } from '@/lib/aqi-service';
-import { isValidCityInput, parseCoordinates, sanitizeText } from '@/lib/constants';
+import { sanitizeText } from '@/lib/constants';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
+const AQI_RATE_LIMIT = 60;
+const RATE_WINDOW_MS = 60_000;
+
+const numericCoord = (min: number, max: number) =>
+  z.string().trim().min(1).transform(Number).pipe(z.number().finite().min(min).max(max));
+
+const aqiQuerySchema = z.object({
+  city: z
+    .string()
+    .transform((s) => sanitizeText(s, 60))
+    .pipe(z.string().min(2).max(60).regex(/^[a-zA-Z0-9\s,.-]+$/))
+    .optional(),
+  lat: numericCoord(-90, 90).optional(),
+  lon: numericCoord(-180, 180).optional(),
+  fresh: z.enum(['0', '1']).optional(),
+});
+
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request);
+  const limit = checkRateLimit(`aqi:${ip}`, AQI_RATE_LIMIT, RATE_WINDOW_MS);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const rawLat = searchParams.get('lat');
     const rawLon = searchParams.get('lon');
-    const forceRefresh = searchParams.get('fresh') === '1';
-
-    if (rawLat !== null || rawLon !== null) {
-      const coords = parseCoordinates(rawLat, rawLon);
-      if (!coords) {
-        return NextResponse.json(
-          { error: 'Invalid lat/lon coordinates.' },
-          { status: 400 }
-        );
-      }
-      const data = await getAirQuality({
-        lat: coords.latitude,
-        lon: coords.longitude,
-        forceRefresh,
-      });
-      return NextResponse.json(data);
-    }
-
     const rawCity = searchParams.get('city');
-    const city = rawCity ? sanitizeText(rawCity, 60) : 'Delhi';
+    const rawFresh = searchParams.get('fresh');
 
-    if (!isValidCityInput(city)) {
+    if ((rawLat !== null) !== (rawLon !== null)) {
       return NextResponse.json(
-        { error: 'Invalid city parameter. Provide 2-60 alphanumeric characters.' },
+        { error: 'Both lat and lon parameters are required together.' },
         { status: 400 }
       );
     }
 
-    const data = await getAirQuality({ city, forceRefresh });
+    const parsed = aqiQuerySchema.safeParse({
+      city: rawCity ?? undefined,
+      lat: rawLat ?? undefined,
+      lon: rawLon ?? undefined,
+      fresh: rawFresh ?? undefined,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid query parameters.' },
+        { status: 400 }
+      );
+    }
+
+    const { lat, lon, city, fresh } = parsed.data;
+    const forceRefresh = fresh === '1';
+
+    if (lat !== undefined && lon !== undefined) {
+      const data = await getAirQuality({ lat, lon, forceRefresh });
+      return NextResponse.json(data);
+    }
+
+    const data = await getAirQuality({ city: city ?? 'Delhi', forceRefresh });
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in /api/aqi:', error);
+    console.error('[API /aqi] Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(
-      { error: 'Failed to fetch air quality data' },
+      { error: 'Unable to fetch air quality data' },
       { status: 500 }
     );
   }

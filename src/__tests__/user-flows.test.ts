@@ -3,12 +3,14 @@ import { NextRequest } from 'next/server';
 import { GET as getAQI } from '../app/api/aqi/route';
 import { POST as postRecommend } from '../app/api/recommend/route';
 import { clearAQICache } from '../lib/aqi-service';
+import { clearRateLimits } from '../lib/rate-limit';
 import { AQI_PALETTE, getAQICategory, getAQITheme } from '../lib/constants';
 import { PersonaType } from '../types/aqi';
 
 describe('Normal User Flows & Edge Cases', () => {
   beforeEach(() => {
     clearAQICache();
+    clearRateLimits();
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
   });
 

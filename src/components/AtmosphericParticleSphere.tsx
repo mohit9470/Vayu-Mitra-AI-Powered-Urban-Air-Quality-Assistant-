@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { getAQITheme } from '@/lib/constants';
+import { useIsMounted, usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { AQICategory } from '@/types/aqi';
 
 interface AtmosphericParticleSphereProps {
@@ -24,22 +25,9 @@ export const AtmosphericParticleSphere: React.FC<AtmosphericParticleSphereProps>
   size = 220,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const mounted = useIsMounted();
   const theme = getAQITheme(category);
-
-  useEffect(() => {
-    setMounted(true);
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handleMotionChange = (e: MediaQueryListEvent) => {
-      setPrefersReducedMotion(e.matches);
-    };
-
-    mediaQuery.addEventListener('change', handleMotionChange);
-    return () => mediaQuery.removeEventListener('change', handleMotionChange);
-  }, []);
 
   useEffect(() => {
     if (!mounted || prefersReducedMotion) return;

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useState } from 'react';
 import { getAQITheme } from '@/lib/constants';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { AQICategory } from '@/types/aqi';
 
 export const MAX_AQI_SCALE = 500;
@@ -87,34 +88,29 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
   const strokeWidth = 14;
   const metrics = computeGaugeMetrics(aqi, size, strokeWidth);
 
-  const [dashOffset, setDashOffset] = useState<number>(metrics.arcLength);
-  const [transitionEnabled, setTransitionEnabled] = useState<boolean>(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const targetKey = `${metrics.arcLength}:${metrics.targetOffset}`;
+  const [anim, setAnim] = useState<{ key: string; offset: number; animate: boolean }>(() => ({
+    key: targetKey,
+    offset: metrics.arcLength,
+    animate: false,
+  }));
+
+  const isStale = anim.key !== targetKey;
+  const dashOffset = prefersReducedMotion
+    ? metrics.targetOffset
+    : isStale
+      ? metrics.arcLength
+      : anim.offset;
+  const transitionEnabled = !prefersReducedMotion && !isStale && anim.animate;
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setTransitionEnabled(false);
-      setDashOffset(metrics.targetOffset);
-      return;
-    }
-
-    // Reset prior animation frame & transition state cleanly before sweeping to new AQI target
-    setTransitionEnabled(false);
-    setDashOffset(metrics.arcLength);
+    if (prefersReducedMotion) return;
 
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        setTransitionEnabled(true);
-        setDashOffset(metrics.targetOffset);
+        setAnim({ key: targetKey, offset: metrics.targetOffset, animate: true });
       });
     });
 
@@ -122,7 +118,7 @@ export const AQIRadialGauge: React.FC<AQIRadialGaugeProps> = ({
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [metrics.arcLength, metrics.targetOffset, prefersReducedMotion]);
+  }, [targetKey, metrics.targetOffset, prefersReducedMotion]);
 
   const displayAQI = Number.isFinite(aqi) ? Math.max(0, Math.round(aqi)) : 0;
 

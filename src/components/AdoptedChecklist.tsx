@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { CheckSquare, Square, Sparkles } from 'lucide-react';
 
 interface ChecklistItem {
@@ -12,21 +12,21 @@ interface AdoptedChecklistProps {
 }
 
 export const AdoptedChecklist: React.FC<AdoptedChecklistProps> = ({ items = [] }) => {
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    setCheckedIds(new Set());
-  }, [items]);
+  const [selection, setSelection] = useState<{ items: ChecklistItem[]; ids: Set<string> }>(() => ({
+    items,
+    ids: new Set(),
+  }));
+  const checkedIds = selection.items === items ? selection.ids : new Set<string>();
 
   const toggleCheck = (id: string) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
+    setSelection((prev) => {
+      const next = new Set(prev.items === items ? prev.ids : []);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
       }
-      return next;
+      return { items, ids: next };
     });
   };
 

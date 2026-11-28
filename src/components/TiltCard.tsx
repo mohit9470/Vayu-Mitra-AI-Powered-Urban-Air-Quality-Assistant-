@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 interface TiltCardProps {
   children: React.ReactNode;
@@ -16,16 +17,10 @@ export const TiltCard: React.FC<TiltCardProps> = ({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const [tilt, setTilt] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mediaQuery.addEventListener('change', handler);
     return () => {
-      mediaQuery.removeEventListener('change', handler);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []);

@@ -68,7 +68,7 @@ export async function generateActionPlan(
       const response = await callGeminiAPI(airQuality, userContext, apiKey);
       if (response) return response;
     } catch (error) {
-      console.warn('[Gemini Service] Gemini API call failed, falling back to deterministic reasoning engine:', error);
+      console.warn('[Gemini Service] Gemini API call failed, falling back to deterministic reasoning engine:', error instanceof Error ? error.message : 'Request failed');
     }
   }
 
@@ -117,6 +117,7 @@ CRITICAL MANDATES:
 
   const res = await fetch(endpoint, {
     method: 'POST',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,

@@ -19,32 +19,6 @@ export function sanitizeText(value: unknown, maxLen = 100): string {
   return value.replace(/[\r\n\t\x00-\x1F\x7F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLen);
 }
 
-export function isValidCityInput(city: string): boolean {
-  return city.length >= 2 && city.length <= 60 && /^[a-zA-Z0-9\s,.-]+$/.test(city);
-}
-
-export function parseCoordinates(
-  rawLat: unknown,
-  rawLon: unknown
-): { latitude: number; longitude: number } | null {
-  if (rawLat === undefined || rawLat === null || rawLon === undefined || rawLon === null) {
-    return null;
-  }
-  const latitude = typeof rawLat === 'string' && rawLat.trim() === '' ? Number.NaN : Number(rawLat);
-  const longitude = typeof rawLon === 'string' && rawLon.trim() === '' ? Number.NaN : Number(rawLon);
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180
-  ) {
-    return null;
-  }
-  return { latitude, longitude };
-}
-
 export interface AQITheme {
   label: AQICategory;
   max: number;

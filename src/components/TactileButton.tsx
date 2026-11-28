@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 interface TactileButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -28,16 +29,10 @@ export const TactileButton: React.FC<TactileButtonProps> = ({
   const timeoutsRef = useRef<number[]>([]);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [ripples, setRipples] = useState<Ripple[]>([]);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mediaQuery.addEventListener('change', handler);
     return () => {
-      mediaQuery.removeEventListener('change', handler);
       timeoutsRef.current.forEach((id) => window.clearTimeout(id));
       timeoutsRef.current = [];
     };

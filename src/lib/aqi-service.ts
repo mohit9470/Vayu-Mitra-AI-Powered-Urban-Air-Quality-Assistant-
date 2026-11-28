@@ -361,7 +361,7 @@ async function fetchWAQILive(
       primaryHealthAction: getPrimaryAction(parsedAqi, cityLabel),
     };
   } catch (err) {
-    console.warn(`[AQI Service] WAQI fetch failed for ${feedPath}:`, err);
+    console.warn(`[AQI Service] WAQI fetch failed for ${feedPath}:`, err instanceof Error ? err.message : 'Request failed');
     return null;
   }
 }
@@ -417,7 +417,7 @@ async function fetchOpenMeteoLive(
       primaryHealthAction: getPrimaryAction(computed.aqi, cityLabel),
     };
   } catch (err) {
-    console.warn(`[AQI Service] Open-Meteo fetch failed for (${lat}, ${lon}):`, err);
+    console.warn(`[AQI Service] Open-Meteo fetch failed for (${lat}, ${lon}):`, err instanceof Error ? err.message : 'Request failed');
     return null;
   }
 }
